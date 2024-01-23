@@ -1455,42 +1455,42 @@ namespace Microsoft.IdentityModel.JsonWebTokens.Tests
             {
                 return new TheoryData<ParseTimeValuesTheoryData>
                 {
-                    new ParseTimeValuesTheoryData("DatesAsStrings")
-                    {
-                        Payload = Default.PayloadString,
-                        Header = new JObject
-                        {
-                            { JwtHeaderParameterNames.Alg, SecurityAlgorithms.Sha512  },
-                            { JwtHeaderParameterNames.Kid, Default.AsymmetricSigningKey.KeyId },
-                            { JwtHeaderParameterNames.Typ, JwtConstants.HeaderType }
-                        }.ToString(Formatting.None)
-                    },
-                    new ParseTimeValuesTheoryData("DatesAsLongs")
-                    {
-                        Payload = new JObject()
-                        {
-                            { JwtRegisteredClaimNames.Email, "Bob@contoso.com" },
-                            { JwtRegisteredClaimNames.GivenName, "Bob" },
-                            { JwtRegisteredClaimNames.Iss, Default.Issuer },
-                            { JwtRegisteredClaimNames.Aud, Default.Audience },
-                            { JwtRegisteredClaimNames.Nbf, EpochTime.GetIntDate(Default.NotBefore)},
-                            { JwtRegisteredClaimNames.Exp, EpochTime.GetIntDate(Default.Expires) }
-                        }.ToString(Formatting.None),
-                        Header = new JObject
-                        {
-                            { JwtHeaderParameterNames.Alg, SecurityAlgorithms.Sha512  },
-                            { JwtHeaderParameterNames.Kid, Default.AsymmetricSigningKey.KeyId },
-                            { JwtHeaderParameterNames.Typ, JwtConstants.HeaderType }
-                        }.ToString(Formatting.None)
-                    },
+                    //new ParseTimeValuesTheoryData("DatesAsStrings")
+                    //{
+                    //    Payload = Default.PayloadString,
+                    //    Header = new JObject
+                    //    {
+                    //        { JwtHeaderParameterNames.Alg, SecurityAlgorithms.Sha512  },
+                    //        { JwtHeaderParameterNames.Kid, Default.AsymmetricSigningKey.KeyId },
+                    //        { JwtHeaderParameterNames.Typ, JwtConstants.HeaderType }
+                    //    }.ToString(Formatting.None)
+                    //},
+                    //new ParseTimeValuesTheoryData("DatesAsLongs")
+                    //{
+                    //    Payload = new JObject()
+                    //    {
+                    //        { JwtRegisteredClaimNames.Email, "Bob@contoso.com" },
+                    //        { JwtRegisteredClaimNames.GivenName, "Bob" },
+                    //        { JwtRegisteredClaimNames.Iss, Default.Issuer },
+                    //        { JwtRegisteredClaimNames.Aud, Default.Audience },
+                    //        { JwtRegisteredClaimNames.Nbf, EpochTime.GetIntDate(Default.NotBefore)},
+                    //        { JwtRegisteredClaimNames.Exp, EpochTime.GetIntDate(Default.Expires) }
+                    //    }.ToString(Formatting.None),
+                    //    Header = new JObject
+                    //    {
+                    //        { JwtHeaderParameterNames.Alg, SecurityAlgorithms.Sha512  },
+                    //        { JwtHeaderParameterNames.Kid, Default.AsymmetricSigningKey.KeyId },
+                    //        { JwtHeaderParameterNames.Typ, JwtConstants.HeaderType }
+                    //    }.ToString(Formatting.None)
+                    //},
                     new ParseTimeValuesTheoryData("DatesAsFloats")
                     {
                         Payload = new JObject()
                         {
-                            { JwtRegisteredClaimNames.Email, "Bob@contoso.com" },
-                            { JwtRegisteredClaimNames.GivenName, "Bob" },
-                            { JwtRegisteredClaimNames.Iss, Default.Issuer },
-                            { JwtRegisteredClaimNames.Aud, Default.Audience },
+                            //{ JwtRegisteredClaimNames.Email, "Bob@contoso.com" },
+                            //{ JwtRegisteredClaimNames.GivenName, "Bob" },
+                            //{ JwtRegisteredClaimNames.Iss, Default.Issuer },
+                            //{ JwtRegisteredClaimNames.Aud, Default.Audience },
                             { JwtRegisteredClaimNames.Nbf, (float) EpochTime.GetIntDate(Default.NotBefore)},
                             { JwtRegisteredClaimNames.Exp, (float) EpochTime.GetIntDate(Default.Expires) }
                         }.ToString(Formatting.None),

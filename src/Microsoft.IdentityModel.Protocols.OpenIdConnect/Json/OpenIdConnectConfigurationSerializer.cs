@@ -110,7 +110,7 @@ namespace Microsoft.IdentityModel.Protocols.OpenIdConnect
         /// <returns>A <see cref="OpenIdConnectConfiguration"/>.</returns>
         public static OpenIdConnectConfiguration Read(ref Utf8JsonReader reader, OpenIdConnectConfiguration config)
         {
-            if (!JsonPrimitives.IsReaderAtTokenType(ref reader, JsonTokenType.StartObject, false))
+            if (!JsonPrimitives.IsReaderAtTokenType(ref reader, JsonTokenType.StartObject, true))
                 throw LogHelper.LogExceptionMessage(
                     new JsonException(
                         LogHelper.FormatInvariant(
@@ -122,15 +122,17 @@ namespace Microsoft.IdentityModel.Protocols.OpenIdConnect
                         LogHelper.MarkAsNonPII(reader.CurrentDepth),
                         LogHelper.MarkAsNonPII(reader.BytesConsumed))));
 
-            while(reader.Read())
+            while(true)
             {
                 #region Check property name using ValueTextEquals
-                // the config spec, https://datatracker.ietf.org/doc/html/rfc7517#section-4, does not require that we reject JSON with
+                // Per spec, https://datatracker.ietf.org/doc/html/rfc7517#section-4, does not require that we reject JSON with
                 // duplicate member names, in strict mode, we could add logic to try a property once and throw if a duplicate shows up.
                 // 6x uses the last value.
                 // TODO - With collections, make sure two properties are not additive
                 if (reader.TokenType == JsonTokenType.PropertyName)
                 {
+                    // JsonPrimitives.Read???? passes 'true' to advance past the PropertyName.
+
                     if (reader.ValueTextEquals(Utf8Bytes.AcrValuesSupported))
                         JsonPrimitives.ReadStrings(ref reader, config.AcrValuesSupported, MetadataName.AcrValuesSupported, ClassName, true);
 
@@ -158,9 +160,9 @@ namespace Microsoft.IdentityModel.Protocols.OpenIdConnect
                     else if (reader.ValueTextEquals(Utf8Bytes.EndSessionEndpoint))
                         config.EndSessionEndpoint = JsonPrimitives.ReadString(ref reader, MetadataName.EndSessionEndpoint, ClassName, true);
 
-                    // TODO these two properties are per spec 'boolean', we shipped 6x with them as string, if we change we may break folks.
-                    // probably best to mark the property obsolete with the gentle tag, then open up another property and keep them in sync,
-                    // remove the obsolete in 8.x
+                    // These these two properties are per spec 'boolean', we shipped 6x accepting a string and transforming to a boolean.
+                    // If we change we may break folks.
+                    // We may want to think about obsolete in 8.x.
                     else if (reader.ValueTextEquals(Utf8Bytes.FrontchannelLogoutSessionSupported))
                     {
                         reader.Read();
@@ -286,10 +288,13 @@ namespace Microsoft.IdentityModel.Protocols.OpenIdConnect
                     else
                     {
                         #region case-insensitive
+                        // Falling back to checking property names as case insensitive.
+
+                        // Passing 'true' causes the reader to advance if it is positioned on a JsonTokenType.PropertyName.
+                        // The reader will be positioned at the property value.
                         string propertyName = JsonPrimitives.ReadPropertyName(ref reader, OpenIdConnectConfiguration.ClassName, true);
 
-                        // fallback to checking property names as case insensitive
-                        // first check to see if the upper case property value is a valid property name if not add to AdditionalData, to avoid unnecessary string compares.
+                        // If the property name is not known add to AdditionalData avoiding unnecessary string compares.
                         if (!OpenIdProviderMetadataNamesUpperCase.Contains(propertyName.ToUpperInvariant()))
                         {
                             config.AdditionalData[propertyName] = JsonPrimitives.ReadPropertyValueAsObject(ref reader, propertyName, OpenIdConnectConfiguration.ClassName);
@@ -297,48 +302,46 @@ namespace Microsoft.IdentityModel.Protocols.OpenIdConnect
                         else
                         {
                             if (propertyName.Equals(MetadataName.AcrValuesSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.AcrValuesSupported, propertyName, ClassName, true);
+                                JsonPrimitives.ReadStrings(ref reader, config.AcrValuesSupported, propertyName, ClassName);
 
                             else if (propertyName.Equals(MetadataName.AuthorizationEndpoint, StringComparison.OrdinalIgnoreCase))
-                                config.AuthorizationEndpoint = JsonPrimitives.ReadString(ref reader, propertyName, ClassName, true);
+                                config.AuthorizationEndpoint = JsonPrimitives.ReadString(ref reader, propertyName, ClassName);
 
                             else if (propertyName.Equals(MetadataName.CheckSessionIframe, StringComparison.OrdinalIgnoreCase))
-                                config.CheckSessionIframe = JsonPrimitives.ReadString(ref reader, propertyName, ClassName, true);
+                                config.CheckSessionIframe = JsonPrimitives.ReadString(ref reader, propertyName, ClassName);
 
                             else if (propertyName.Equals(MetadataName.ClaimsLocalesSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.ClaimsLocalesSupported, propertyName, ClassName, true);
+                                JsonPrimitives.ReadStrings(ref reader, config.ClaimsLocalesSupported, propertyName, ClassName);
 
                             else if (propertyName.Equals(MetadataName.ClaimsParameterSupported, StringComparison.OrdinalIgnoreCase))
-                                config.ClaimsParameterSupported = JsonPrimitives.ReadBoolean(ref reader, propertyName, ClassName, true);
+                                config.ClaimsParameterSupported = JsonPrimitives.ReadBoolean(ref reader, propertyName, ClassName);
 
                             else if (propertyName.Equals(MetadataName.ClaimsSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.ClaimsSupported, propertyName, ClassName, true);
+                                JsonPrimitives.ReadStrings(ref reader, config.ClaimsSupported, propertyName, ClassName);
 
                             else if (propertyName.Equals(MetadataName.ClaimTypesSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.ClaimTypesSupported, propertyName, ClassName, true);
+                                JsonPrimitives.ReadStrings(ref reader, config.ClaimTypesSupported, propertyName, ClassName);
 
                             else if (propertyName.Equals(MetadataName.DisplayValuesSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.DisplayValuesSupported, propertyName, ClassName, true);
+                                JsonPrimitives.ReadStrings(ref reader, config.DisplayValuesSupported, propertyName, ClassName);
 
                             else if (propertyName.Equals(MetadataName.EndSessionEndpoint, StringComparison.OrdinalIgnoreCase))
-                                config.EndSessionEndpoint = JsonPrimitives.ReadString(ref reader, propertyName, ClassName, true);
+                                config.EndSessionEndpoint = JsonPrimitives.ReadString(ref reader, propertyName, ClassName);
 
-                            // TODO these two properties are per spec 'boolean', we shipped 6x with them as string, if we change we may break folks.
-                            // probably best to mark the property obsolete with the gentle tag, then open up another property and keep them in sync,
-                            // remove the obsolete in 8.x
-                            else if (propertyName.Equals(propertyName, StringComparison.OrdinalIgnoreCase))
+                            // These these two properties are per spec 'boolean', we shipped 6x accepting a string and transforming to a boolean.
+                            // If we change we may break folks.
+                            // We may want to think about obsolete in 8.x.
+                            else if (propertyName.Equals(MetadataName.FrontchannelLogoutSessionSupported, StringComparison.OrdinalIgnoreCase))
                             {
-                                reader.Read();
                                 if (reader.TokenType == JsonTokenType.True)
                                     config.FrontchannelLogoutSessionSupported = "True";
                                 else if (reader.TokenType == JsonTokenType.False)
                                     config.FrontchannelLogoutSessionSupported = "False";
                                 else
-                                    config.FrontchannelLogoutSessionSupported = JsonPrimitives.ReadString(ref reader, MetadataName.FrontchannelLogoutSessionSupported, ClassName, false);
+                                    config.FrontchannelLogoutSessionSupported = JsonPrimitives.ReadString(ref reader, propertyName, ClassName, false);
                             }
-                            else if (propertyName.Equals(propertyName, StringComparison.OrdinalIgnoreCase))
+                            else if (propertyName.Equals(MetadataName.FrontchannelLogoutSupported, StringComparison.OrdinalIgnoreCase))
                             {
-                                reader.Read();
                                 if (reader.TokenType == JsonTokenType.True)
                                     config.FrontchannelLogoutSupported = "True";
                                 else if (reader.TokenType == JsonTokenType.False)
@@ -347,110 +350,113 @@ namespace Microsoft.IdentityModel.Protocols.OpenIdConnect
                                     config.FrontchannelLogoutSupported = JsonPrimitives.ReadString(ref reader, propertyName, ClassName, false);
                             }
                             else if (propertyName.Equals(MetadataName.GrantTypesSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.GrantTypesSupported, propertyName, ClassName, true);
+                                JsonPrimitives.ReadStrings(ref reader, config.GrantTypesSupported, propertyName, ClassName);
 
                             else if (propertyName.Equals(MetadataName.HttpLogoutSupported, StringComparison.OrdinalIgnoreCase))
-                                config.HttpLogoutSupported = JsonPrimitives.ReadBoolean(ref reader, propertyName, ClassName, true);
+                                config.HttpLogoutSupported = JsonPrimitives.ReadBoolean(ref reader, propertyName, ClassName);
 
                             else if (propertyName.Equals(MetadataName.IdTokenEncryptionAlgValuesSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.IdTokenEncryptionAlgValuesSupported, propertyName, ClassName, true);
+                                JsonPrimitives.ReadStrings(ref reader, config.IdTokenEncryptionAlgValuesSupported, propertyName, ClassName);
 
                             else if (propertyName.Equals(MetadataName.IdTokenEncryptionEncValuesSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.IdTokenEncryptionEncValuesSupported, propertyName, ClassName, true);
+                                JsonPrimitives.ReadStrings(ref reader, config.IdTokenEncryptionEncValuesSupported, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName.IdTokenSigningAlgValuesSupported , StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.IdTokenSigningAlgValuesSupported, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.IdTokenSigningAlgValuesSupported, StringComparison.OrdinalIgnoreCase))
+                                JsonPrimitives.ReadStrings(ref reader, config.IdTokenSigningAlgValuesSupported, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. IntrospectionEndpoint, StringComparison.OrdinalIgnoreCase))
-                                config.IntrospectionEndpoint = JsonPrimitives.ReadString(ref reader, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.IntrospectionEndpoint, StringComparison.OrdinalIgnoreCase))
+                                config.IntrospectionEndpoint = JsonPrimitives.ReadString(ref reader, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. IntrospectionEndpointAuthMethodsSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.IntrospectionEndpointAuthMethodsSupported, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.IntrospectionEndpointAuthMethodsSupported, StringComparison.OrdinalIgnoreCase))
+                                JsonPrimitives.ReadStrings(ref reader, config.IntrospectionEndpointAuthMethodsSupported, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. IntrospectionEndpointAuthSigningAlgValuesSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.IntrospectionEndpointAuthSigningAlgValuesSupported, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.IntrospectionEndpointAuthSigningAlgValuesSupported, StringComparison.OrdinalIgnoreCase))
+                                JsonPrimitives.ReadStrings(ref reader, config.IntrospectionEndpointAuthSigningAlgValuesSupported, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. Issuer, StringComparison.OrdinalIgnoreCase))
-                                config.Issuer = JsonPrimitives.ReadString(ref reader, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.Issuer, StringComparison.OrdinalIgnoreCase))
+                                config.Issuer = JsonPrimitives.ReadString(ref reader, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. JwksUri, StringComparison.OrdinalIgnoreCase))
-                                config.JwksUri = JsonPrimitives.ReadString(ref reader, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.JwksUri, StringComparison.OrdinalIgnoreCase))
+                                config.JwksUri = JsonPrimitives.ReadString(ref reader, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. LogoutSessionSupported, StringComparison.OrdinalIgnoreCase))
-                                config.LogoutSessionSupported = JsonPrimitives.ReadBoolean(ref reader, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.LogoutSessionSupported, StringComparison.OrdinalIgnoreCase))
+                                config.LogoutSessionSupported = JsonPrimitives.ReadBoolean(ref reader, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. OpPolicyUri, StringComparison.OrdinalIgnoreCase))
-                                config.OpPolicyUri = JsonPrimitives.ReadString(ref reader, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.OpPolicyUri, StringComparison.OrdinalIgnoreCase))
+                                config.OpPolicyUri = JsonPrimitives.ReadString(ref reader, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. OpTosUri, StringComparison.OrdinalIgnoreCase))
-                                config.OpTosUri = JsonPrimitives.ReadString(ref reader, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.OpTosUri, StringComparison.OrdinalIgnoreCase))
+                                config.OpTosUri = JsonPrimitives.ReadString(ref reader, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. RegistrationEndpoint, StringComparison.OrdinalIgnoreCase))
-                                config.RegistrationEndpoint = JsonPrimitives.ReadString(ref reader, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.RegistrationEndpoint, StringComparison.OrdinalIgnoreCase))
+                                config.RegistrationEndpoint = JsonPrimitives.ReadString(ref reader, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. RequestObjectEncryptionAlgValuesSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.RequestObjectEncryptionAlgValuesSupported, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.RequestObjectEncryptionAlgValuesSupported, StringComparison.OrdinalIgnoreCase))
+                                JsonPrimitives.ReadStrings(ref reader, config.RequestObjectEncryptionAlgValuesSupported, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. RequestObjectEncryptionEncValuesSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.RequestObjectEncryptionEncValuesSupported, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.RequestObjectEncryptionEncValuesSupported, StringComparison.OrdinalIgnoreCase))
+                                JsonPrimitives.ReadStrings(ref reader, config.RequestObjectEncryptionEncValuesSupported, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. RequestObjectSigningAlgValuesSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.RequestObjectSigningAlgValuesSupported, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.RequestObjectSigningAlgValuesSupported, StringComparison.OrdinalIgnoreCase))
+                                JsonPrimitives.ReadStrings(ref reader, config.RequestObjectSigningAlgValuesSupported, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. RequestParameterSupported, StringComparison.OrdinalIgnoreCase))
-                                config.RequestParameterSupported = JsonPrimitives.ReadBoolean(ref reader, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.RequestParameterSupported, StringComparison.OrdinalIgnoreCase))
+                                config.RequestParameterSupported = JsonPrimitives.ReadBoolean(ref reader, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. RequestUriParameterSupported, StringComparison.OrdinalIgnoreCase))
-                                config.RequestUriParameterSupported = JsonPrimitives.ReadBoolean(ref reader, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.RequestUriParameterSupported, StringComparison.OrdinalIgnoreCase))
+                                config.RequestUriParameterSupported = JsonPrimitives.ReadBoolean(ref reader, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. RequireRequestUriRegistration, StringComparison.OrdinalIgnoreCase))
-                                config.RequireRequestUriRegistration = JsonPrimitives.ReadBoolean(ref reader, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.RequireRequestUriRegistration, StringComparison.OrdinalIgnoreCase))
+                                config.RequireRequestUriRegistration = JsonPrimitives.ReadBoolean(ref reader, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. ResponseModesSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.ResponseModesSupported, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.ResponseModesSupported, StringComparison.OrdinalIgnoreCase))
+                                JsonPrimitives.ReadStrings(ref reader, config.ResponseModesSupported, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. ResponseTypesSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.ResponseTypesSupported, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.ResponseTypesSupported, StringComparison.OrdinalIgnoreCase))
+                                JsonPrimitives.ReadStrings(ref reader, config.ResponseTypesSupported, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. ScopesSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.ScopesSupported, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.ScopesSupported, StringComparison.OrdinalIgnoreCase))
+                                JsonPrimitives.ReadStrings(ref reader, config.ScopesSupported, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. ServiceDocumentation, StringComparison.OrdinalIgnoreCase))
-                                config.ServiceDocumentation = JsonPrimitives.ReadString(ref reader, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.ServiceDocumentation, StringComparison.OrdinalIgnoreCase))
+                                config.ServiceDocumentation = JsonPrimitives.ReadString(ref reader, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. SubjectTypesSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.SubjectTypesSupported, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.SubjectTypesSupported, StringComparison.OrdinalIgnoreCase))
+                                JsonPrimitives.ReadStrings(ref reader, config.SubjectTypesSupported, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. TokenEndpoint, StringComparison.OrdinalIgnoreCase))
-                                config.TokenEndpoint = JsonPrimitives.ReadString(ref reader, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.TokenEndpoint, StringComparison.OrdinalIgnoreCase))
+                                config.TokenEndpoint = JsonPrimitives.ReadString(ref reader, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. TokenEndpointAuthMethodsSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.TokenEndpointAuthMethodsSupported, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.TokenEndpointAuthMethodsSupported, StringComparison.OrdinalIgnoreCase))
+                                JsonPrimitives.ReadStrings(ref reader, config.TokenEndpointAuthMethodsSupported, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. TokenEndpointAuthSigningAlgValuesSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.TokenEndpointAuthSigningAlgValuesSupported, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.TokenEndpointAuthSigningAlgValuesSupported, StringComparison.OrdinalIgnoreCase))
+                                JsonPrimitives.ReadStrings(ref reader, config.TokenEndpointAuthSigningAlgValuesSupported, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. UILocalesSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.UILocalesSupported, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.UILocalesSupported, StringComparison.OrdinalIgnoreCase))
+                                JsonPrimitives.ReadStrings(ref reader, config.UILocalesSupported, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. UserInfoEncryptionAlgValuesSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.UserInfoEndpointEncryptionAlgValuesSupported, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.UserInfoEncryptionAlgValuesSupported, StringComparison.OrdinalIgnoreCase))
+                                JsonPrimitives.ReadStrings(ref reader, config.UserInfoEndpointEncryptionAlgValuesSupported, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. UserInfoEncryptionEncValuesSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.UserInfoEndpointEncryptionEncValuesSupported, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.UserInfoEncryptionEncValuesSupported, StringComparison.OrdinalIgnoreCase))
+                                JsonPrimitives.ReadStrings(ref reader, config.UserInfoEndpointEncryptionEncValuesSupported, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. UserInfoEndpoint, StringComparison.OrdinalIgnoreCase))
-                                config.UserInfoEndpoint = JsonPrimitives.ReadString(ref reader, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.UserInfoEndpoint, StringComparison.OrdinalIgnoreCase))
+                                config.UserInfoEndpoint = JsonPrimitives.ReadString(ref reader, propertyName, ClassName);
 
-                            else if (propertyName.Equals(MetadataName. UserInfoSigningAlgValuesSupported, StringComparison.OrdinalIgnoreCase))
-                                JsonPrimitives.ReadStrings(ref reader, config.UserInfoEndpointSigningAlgValuesSupported, propertyName, ClassName, true);
+                            else if (propertyName.Equals(MetadataName.UserInfoSigningAlgValuesSupported, StringComparison.OrdinalIgnoreCase))
+                                JsonPrimitives.ReadStrings(ref reader, config.UserInfoEndpointSigningAlgValuesSupported, propertyName, ClassName);
 
                         }
                         #endregion case-insensitive
                     }
                 }
 
-                if (JsonPrimitives.IsReaderAtTokenType(ref reader, JsonTokenType.EndObject, false))
+                // We read a JsonTokenType.StartObject above, exiting and positioning reader at next token.
+                else if (JsonPrimitives.IsReaderAtTokenType(ref reader, JsonTokenType.EndObject, true))
+                    break;
+                else if (!reader.Read())
                     break;
             }
 

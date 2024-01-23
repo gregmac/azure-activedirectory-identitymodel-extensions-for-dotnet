@@ -17,12 +17,13 @@ namespace Microsoft.IdentityModel.Benchmarks
         }
         private static void DebugThroughTests()
         {
+#if NET6_0_OR_GREATER
             AsymmetricAdapterSignatures asymmetricAdapter = new AsymmetricAdapterSignatures();
             asymmetricAdapter.Setup();
             asymmetricAdapter.SignDotnetCreatingBufferRSA();
             asymmetricAdapter.SignSpanWithArrayPoolRSA();
             asymmetricAdapter.SignSpanWithFixedBufferRSA();
-
+#endif
             CreateJWETests createJWETests = new CreateJWETests();
             createJWETests.Setup();
             string jwe = createJWETests.JsonWebTokenHandler_CreateJWE();

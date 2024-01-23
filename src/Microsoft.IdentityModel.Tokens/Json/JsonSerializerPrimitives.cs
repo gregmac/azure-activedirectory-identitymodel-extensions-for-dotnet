@@ -492,11 +492,19 @@ namespace Microsoft.IdentityModel.Tokens.Json
 
         internal static bool ReadBoolean(ref Utf8JsonReader reader, string propertyName, string className, bool read = false)
         {
+            // 'read' is used when the reader is positioned on a property name and we expect the next token to a boolean.
+            // it is a convience so that all the methods that call this don't have to call reader.Read() first.
             if (read)
                 reader.Read();
 
             if (reader.TokenType == JsonTokenType.True || reader.TokenType == JsonTokenType.False)
-                return reader.GetBoolean();
+            {
+                bool retVal = reader.GetBoolean();
+
+                // move to next token.
+                reader.Read();
+                return retVal;
+            }
 
             throw LogHelper.LogExceptionMessage(
                 CreateJsonReaderException(ref reader, "JsonTokenType.False or JsonTokenType.True", className, propertyName));
@@ -504,28 +512,45 @@ namespace Microsoft.IdentityModel.Tokens.Json
 
         internal static long ReadLong(ref Utf8JsonReader reader, string propertyName, string className, bool read = false)
         {
+            // 'read' is used when the reader is positioned on a property name and we expect the next token to a long.
+            // it is a convience so that all the methods that call this don't have to call reader.Read() first.
             if (read)
                 reader.Read();
 
+            long retVal = 0;
+
             if (reader.TokenType == JsonTokenType.Number)
             {
-                if (reader.TryGetInt64(out long l))
-                    return l;
-
-                if (reader.TryGetDouble(out double d))
-                    return Convert.ToInt64(d);
+                if (!reader.TryGetInt64(out retVal))
+                {
+                    if (reader.TryGetDouble(out double d))
+                        retVal = Convert.ToInt64(d);
+                    else
+                        throw LogHelper.LogExceptionMessage(
+                            CreateJsonReaderException(ref reader, "JsonTokenType.Number", className, propertyName));
+                }
             }
             else if (reader.TokenType == JsonTokenType.String)
             {
-                if (long.TryParse(reader.GetString(), out long value))
-                    return value;
-
-                if (double.TryParse(reader.GetString(), out double d))
-                    return Convert.ToInt64(d);
+                if (!long.TryParse(reader.GetString(), out retVal))
+                {
+                    if (double.TryParse(reader.GetString(), out double d))
+                        retVal = Convert.ToInt64(d);
+                    else
+                        throw LogHelper.LogExceptionMessage(
+                            CreateJsonReaderException(ref reader, "JsonTokenType.String", className, propertyName));
+                }
+            }
+            else
+            {
+                throw LogHelper.LogExceptionMessage(
+                    CreateJsonReaderException(ref reader, "JsonTokenType.Number", className, propertyName));
             }
 
-            throw LogHelper.LogExceptionMessage(
-                CreateJsonReaderException(ref reader, "JsonTokenType.Number", className, propertyName));
+            // move to next token.
+            reader.Read();
+
+            return retVal;
         }
 
         internal static double ReadDouble(ref Utf8JsonReader reader, string propertyName, string className, bool read = false)
@@ -582,13 +607,22 @@ namespace Microsoft.IdentityModel.Tokens.Json
 #if NET6_0_OR_GREATER
             JsonElement? jsonElement;
             bool ret = JsonElement.TryParseValue(ref reader, out jsonElement);
+
+            // move to next token.
+            reader.Read();
+
             if (ret)
                 return jsonElement.Value;
 
             return default;
 #else
             using (JsonDocument jsonDocument = JsonDocument.ParseValue(ref reader))
+            {
+                // move to next token.
+                reader.Read();
+
                 return jsonDocument.RootElement.Clone();
+            }
 #endif
         }
 
@@ -596,19 +630,27 @@ namespace Microsoft.IdentityModel.Tokens.Json
         {
             // returning null keeps the same logic as JsonSerialization.ReadObject
             if (reader.TokenType == JsonTokenType.Null)
+            {
+                // move to next token.
+                reader.Read();
                 return null;
+            }
 
-            List<object> objects = new();
-            if (!IsReaderAtTokenType(ref reader, JsonTokenType.StartArray, false))
+            if (!IsReaderAtTokenType(ref reader, JsonTokenType.StartArray, true))
                 throw LogHelper.LogExceptionMessage(
                     CreateJsonReaderExceptionInvalidType(ref reader, "JsonTokenType.StartArray", className, propertyName));
 
-            while (reader.Read())
-            {
-                if (IsReaderAtTokenType(ref reader, JsonTokenType.EndArray, false))
-                    break;
+            List<object> objects = [];
 
-                objects.Add(ReadPropertyValueAsObject(ref reader, propertyName, className));
+            while (true)
+            {
+                // We read a JsonTokenType.StartArray above, exiting and positioning reader at next token.
+                if (IsReaderAtTokenType(ref reader, JsonTokenType.EndArray, true))
+                    break;
+                else if (reader.TokenType == JsonTokenType.PropertyName)
+                    objects.Add(ReadPropertyValueAsObject(ref reader, propertyName, className));
+                else if (!reader.Read())
+                    break;
             }
 
             return objects;
@@ -634,6 +676,8 @@ namespace Microsoft.IdentityModel.Tokens.Json
 
         internal static string ReadString(ref Utf8JsonReader reader, string propertyName, string className, bool read = false)
         {
+            // 'read' is used when the reader is positioned on a property name and we expect the next token to a string.
+            // it is a convience so that all the methods that call this don't have to call reader.Read() first.
             if (read)
                 reader.Read();
 
@@ -645,7 +689,12 @@ namespace Microsoft.IdentityModel.Tokens.Json
                 throw LogHelper.LogExceptionMessage(
                     CreateJsonReaderException(ref reader, "JsonTokenType.String", className, propertyName));
 
-            return reader.GetString();
+            string retval = reader.GetString();
+
+            // move to next token.
+            reader.Read();
+
+            return retval;
         }
 
         /// <summary>
@@ -663,7 +712,10 @@ namespace Microsoft.IdentityModel.Tokens.Json
 
             // returning null keeps the same logic as JsonSerialization.ReadObject
             if (reader.TokenType == JsonTokenType.Null)
+            {
+                reader.Read();
                 return null;
+            }
 
             if (reader.TokenType == JsonTokenType.Number)
                 return ReadNumber(ref reader).ToString();
@@ -672,7 +724,12 @@ namespace Microsoft.IdentityModel.Tokens.Json
                 throw LogHelper.LogExceptionMessage(
                     CreateJsonReaderException(ref reader, "JsonTokenType.String or JsonTokenType.Number", className, propertyName));
 
-            return reader.GetString();
+            string retVal = reader.GetString();
+
+            // move to next token.
+            reader.Read();
+
+            return retVal;
         }
 
         internal static object ReadStringAsObject(ref Utf8JsonReader reader, string propertyName, string className, bool read = false)
@@ -682,7 +739,11 @@ namespace Microsoft.IdentityModel.Tokens.Json
 
             // returning null keeps the same logic as JsonSerialization.ReadObject
             if (reader.TokenType == JsonTokenType.Null)
+            {
+                // move to next token.
+                reader.Read();
                 return null;
+            }
 
             if (reader.TokenType != JsonTokenType.String)
                 throw LogHelper.LogExceptionMessage(
@@ -707,6 +768,9 @@ namespace Microsoft.IdentityModel.Tokens.Json
             { }
 #pragma warning restore CA1031 // Do not catch general exception types
 
+            // move to next token.
+            reader.Read();
+
             return originalString;
         }
 
@@ -717,23 +781,33 @@ namespace Microsoft.IdentityModel.Tokens.Json
             string className,
             bool read = false)
         {
+            // 'read' is used when the reader is positioned on a property name and we expect the next token to be an array of strings.
+            // it is a convience so that all the methods that call this don't have to call reader.Read() first.
             if (read)
                 reader.Read();
 
             // returning null keeps the same logic as JsonSerialization.ReadObject
             if (reader.TokenType == JsonTokenType.Null)
+            {
+                // move to next token.
+                reader.Read();
                 return null;
+            }
 
-            if (!IsReaderAtTokenType(ref reader, JsonTokenType.StartArray, false))
+            // Expect the reader to be at a JsonTokenType.StartArray.
+            if (!IsReaderAtTokenType(ref reader, JsonTokenType.StartArray, true))
                 throw LogHelper.LogExceptionMessage(
                     CreateJsonReaderExceptionInvalidType(ref reader, "JsonTokenType.StartArray", className, propertyName));
 
-            while (reader.Read())
+            while (true)
             {
-                if (IsReaderAtTokenType(ref reader, JsonTokenType.EndArray, false))
+                // We read a JsonTokenType.StartArray above, exiting and positioning reader at next token.
+                if (IsReaderAtTokenType(ref reader, JsonTokenType.EndArray, true))
                     break;
-
-                strings.Add(ReadString(ref reader, propertyName, className));
+                else if (reader.TokenType == JsonTokenType.String)
+                    strings.Add(ReadString(ref reader, propertyName, className));
+                else if (!reader.Read())
+                    break;
             }
 
             return strings;
@@ -751,15 +825,19 @@ namespace Microsoft.IdentityModel.Tokens.Json
 
             // returning null keeps the same logic as JsonSerialization.ReadObject
             if (reader.TokenType == JsonTokenType.Null)
+            {
+                reader.Read();
                 return null;
+            }
 
-            if (!IsReaderAtTokenType(ref reader, JsonTokenType.StartArray, false))
+            if (!IsReaderAtTokenType(ref reader, JsonTokenType.StartArray, true))
                 throw LogHelper.LogExceptionMessage(
                     CreateJsonReaderExceptionInvalidType(ref reader, "JsonTokenType.StartArray", className, propertyName));
 
-            while (reader.Read())
+            while (true)
             {
-                if (IsReaderAtTokenType(ref reader, JsonTokenType.EndArray, false))
+                // We read a JsonTokenType.StartArray above, exiting and positioning reader at next token.
+                if (IsReaderAtTokenType(ref reader, JsonTokenType.EndArray, true))
                     break;
 
                 strings.Add(ReadString(ref reader, propertyName, className));
@@ -776,19 +854,26 @@ namespace Microsoft.IdentityModel.Tokens.Json
             string className)
         {
             if (reader.TokenType == JsonTokenType.Null)
+            {
+                reader.Read();
                 return;
+            }
 
-            if (!IsReaderAtTokenType(ref reader, JsonTokenType.StartArray, false))
+            if (!IsReaderAtTokenType(ref reader, JsonTokenType.StartArray, true))
                 throw LogHelper.LogExceptionMessage(
                     CreateJsonReaderExceptionInvalidType(ref reader, "JsonTokenType.StartArray", className, propertyName));
 
-            while (reader.Read())
+            while (true)
             {
-                if (IsReaderAtTokenType(ref reader, JsonTokenType.EndArray, false))
+                // We read a JsonTokenType.StartArray above, exiting and positioning reader at next token.
+                if (IsReaderAtTokenType(ref reader, JsonTokenType.EndArray, true))
                     break;
 
                 if (reader.TokenType == JsonTokenType.Null)
+                {
+                    reader.Read();
                     continue;
+                }
 
                 strings.Add(ReadString(ref reader, propertyName, className));
             }
@@ -813,12 +898,18 @@ namespace Microsoft.IdentityModel.Tokens.Json
             switch (reader.TokenType)
             {
                 case JsonTokenType.False:
+                    // move to next token.
+                    reader.Read();
                     return false;
                 case JsonTokenType.Number:
                     return ReadNumber(ref reader);
                 case JsonTokenType.True:
+                    // move to next token.
+                    reader.Read();
                     return true;
                 case JsonTokenType.Null:
+                    // move to next token.
+                    reader.Read();
                     return null;
                 case JsonTokenType.String:
                     return ReadStringAsObject(ref reader, propertyName, className);
@@ -837,200 +928,228 @@ namespace Microsoft.IdentityModel.Tokens.Json
         internal static object ReadNumber(ref Utf8JsonReader reader)
         {
             if (reader.TryGetInt32(out int i))
+            {
+                // move to next token.
+                reader.Read();
                 return i;
+            }
             else if (reader.TryGetInt64(out long l))
+            {
+                // move to next token.
+                reader.Read();
                 return l;
+            }
             else if (reader.TryGetDouble(out double d))
+            {
+                // move to next token.
+                reader.Read();
                 return d;
+            }
             else if (reader.TryGetUInt32(out uint u))
+            {
+                // move to next token.
+                reader.Read();
                 return u;
+            }
             else if (reader.TryGetUInt64(out ulong ul))
+            {
+                // move to next token.
+                reader.Read();
                 return ul;
+            }
             else if (reader.TryGetSingle(out float f))
+            {
+                // move to next token.
+                reader.Read();
                 return f;
+            }
             else if (reader.TryGetDecimal(out decimal m))
+            {
+                // move to next token.
+                reader.Read();
                 return m;
+            }
 
             Debug.Assert(false, "expected to read a number, but none of the Utf8JsonReader.TryGet... methods returned true.");
 
             return ReadJsonElement(ref reader);
         }
         #endregion
-    
-        #region Write
-        public static void WriteAsJsonElement(ref Utf8JsonWriter writer, string json)
-        {
-            Utf8JsonReader reader = new Utf8JsonReader(Encoding.UTF8.GetBytes(json).AsSpan());
+
+                #region Write
+                public static void WriteAsJsonElement(ref Utf8JsonWriter writer, string json)
+                {
+                    Utf8JsonReader reader = new Utf8JsonReader(Encoding.UTF8.GetBytes(json).AsSpan());
 
 #if NET6_0_OR_GREATER
-            if (JsonElement.TryParseValue(ref reader, out JsonElement? jsonElement))
-                jsonElement.Value.WriteTo(writer);
+                    if (JsonElement.TryParseValue(ref reader, out JsonElement? jsonElement))
+                        jsonElement.Value.WriteTo(writer);
 #else
             using (JsonDocument jsonDocument = JsonDocument.ParseValue(ref reader))
                 jsonDocument.RootElement.WriteTo(writer);
 #endif
-        }
+                }
 
-        public static void WriteObjects(ref Utf8JsonWriter writer, IDictionary<string, object> dictionary)
-        {
-            if (dictionary?.Count > 0)
-                foreach (KeyValuePair<string, object> kvp in dictionary)
-                    WriteObject(ref writer, kvp.Key, kvp.Value);
-        }
+                public static void WriteObjects(ref Utf8JsonWriter writer, IDictionary<string, object> dictionary)
+                {
+                    if (dictionary?.Count > 0)
+                        foreach (KeyValuePair<string, object> kvp in dictionary)
+                            WriteObject(ref writer, kvp.Key, kvp.Value);
+                }
 
-        /// <summary>
-        /// Writes an 'object' as a JsonProperty.
-        /// This was written to support what IdentityModel6x supported and is not meant to be a
-        /// general object serializer.
-        /// If a user needs to serialize a special value, then serialize the value into a JsonElement.
-        /// </summary>
-        public static void WriteObject(ref Utf8JsonWriter writer, string key, object obj)
-        {
-            if (writer.CurrentDepth >= MaxDepth)
-                throw new InvalidOperationException(LogHelper.FormatInvariant(
-                    LogMessages.IDX10815,
-                    LogHelper.MarkAsNonPII(writer.CurrentDepth),
-                    LogHelper.MarkAsNonPII(MaxDepth)));
+                /// <summary>
+                /// Writes an 'object' as a JsonProperty.
+                /// This was written to support what IdentityModel6x supported and is not meant to be a
+                /// general object serializer.
+                /// If a user needs to serialize a special value, then serialize the value into a JsonElement.
+                /// </summary>
+                public static void WriteObject(ref Utf8JsonWriter writer, string key, object obj)
+                {
+                    if (writer.CurrentDepth >= MaxDepth)
+                        throw new InvalidOperationException(LogHelper.FormatInvariant(
+                            LogMessages.IDX10815,
+                            LogHelper.MarkAsNonPII(writer.CurrentDepth),
+                            LogHelper.MarkAsNonPII(MaxDepth)));
 
-            if (obj is null)
-            {
-                writer.WriteNull(key);
-                return;
+                    if (obj is null)
+                    {
+                        writer.WriteNull(key);
+                        return;
+                    }
+
+                    Type objType = obj.GetType();
+
+                    if (obj is string str)
+                        writer.WriteString(key, str);
+                    else if (obj is long l)
+                        writer.WriteNumber(key, l);
+                    else if (obj is int i)
+                        writer.WriteNumber(key, i);
+                    else if (obj is bool b)
+                        writer.WriteBoolean(key, b);
+                    else if (obj is DateTime dt)
+                        writer.WriteString(key, dt.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture));
+                    else if (typeof(IDictionary).IsAssignableFrom(objType))
+                    {
+                        IDictionary dictionary = (IDictionary)obj;
+                        writer.WritePropertyName(key);
+
+                        writer.WriteStartObject();
+                        foreach (var k in dictionary.Keys)
+                            WriteObject(ref writer, k.ToString(), dictionary[k]);
+
+                        writer.WriteEndObject();
+                    }
+                    else if (typeof(IList).IsAssignableFrom(objType))
+                    {
+                        IList list = (IList)obj;
+                        writer.WriteStartArray(key);
+                        foreach (var k in list)
+                            WriteObjectValue(ref writer, k);
+
+                        writer.WriteEndArray();
+                    }
+                    else if (obj is JsonElement j)
+                    {
+                        writer.WritePropertyName(key);
+                        j.WriteTo(writer);
+                    }
+                    else if (obj is double dub)
+                        writer.WriteNumber(key, dub);
+                    else if (obj is decimal d)
+                        writer.WriteNumber(key, d);
+                    else if (obj is float f)
+                        writer.WriteNumber(key, f);
+                    else
+                        throw LogHelper.LogExceptionMessage(
+                            new ArgumentException(
+                                LogHelper.FormatInvariant(
+                                    LogMessages.IDX11025,
+                                    LogHelper.MarkAsNonPII(objType.ToString()),
+                                    LogHelper.MarkAsNonPII(key))));
+                }
+
+                /// <summary>
+                /// Writes values into an array.
+                /// Assumes the writer.StartArray() has been called.
+                /// </summary>
+                /// <param name="writer"></param>
+                /// <param name="obj"></param>
+                public static void WriteObjectValue(ref Utf8JsonWriter writer, object obj)
+                {
+                    if (writer.CurrentDepth >= MaxDepth)
+                        throw new InvalidOperationException(LogHelper.FormatInvariant(
+                            LogMessages.IDX10815,
+                            LogHelper.MarkAsNonPII(writer.CurrentDepth),
+                            LogHelper.MarkAsNonPII(MaxDepth)));
+
+                    if (obj is null)
+                    {
+                        writer.WriteNullValue();
+                        return;
+                    }
+
+                    Type objType = obj.GetType();
+
+                    if (obj is string str)
+                        writer.WriteStringValue(str);
+                    else if (obj is DateTime dt)
+                        writer.WriteStringValue(dt.ToUniversalTime());
+                    else if (obj is int i)
+                        writer.WriteNumberValue(i);
+                    else if (obj is bool b)
+                        writer.WriteBooleanValue(b);
+                    else if (obj is long l)
+                        writer.WriteNumberValue(l);
+                    else if (obj is null)
+                        writer.WriteNullValue();
+                    else if (obj is double d)
+                        writer.WriteNumberValue((decimal)d);
+                    else if (obj is JsonElement j)
+                        j.WriteTo(writer);
+                    else if (typeof(IDictionary).IsAssignableFrom(objType))
+                    {
+                        IDictionary dictionary = (IDictionary)obj;
+                        writer.WriteStartObject();
+                        foreach (var k in dictionary.Keys)
+                            WriteObject(ref writer, k.ToString(), dictionary[k]);
+
+                        writer.WriteEndObject();
+                    }
+                    else if (typeof(IList).IsAssignableFrom(objType))
+                    {
+                        IList list = (IList)obj;
+                        writer.WriteStartArray();
+                        foreach (var k in list)
+                            WriteObjectValue(ref writer, k);
+
+                        writer.WriteEndArray();
+                    }
+                    else if (obj is decimal m)
+                        writer.WriteNumberValue(m);
+                    else if (obj is float f)
+                        writer.WriteNumberValue(f);
+                    else
+                        writer.WriteStringValue(obj.ToString());
+                }
+
+                public static void WriteStrings(ref Utf8JsonWriter writer, ReadOnlySpan<byte> propertyName, IList<string> strings)
+                {
+                    writer.WriteStartArray(propertyName);
+                    foreach (string str in strings)
+                        writer.WriteStringValue(str);
+
+                    writer.WriteEndArray();
+                }
+
+                public static void WriteStrings(ref Utf8JsonWriter writer, ReadOnlySpan<byte> propertyName, ICollection<string> strings)
+                {
+                    writer.WriteStartArray(propertyName);
+                    foreach (string str in strings)
+                        writer.WriteStringValue(str);
+
+                    writer.WriteEndArray();
+                }
+                #endregion
             }
-
-            Type objType = obj.GetType();
-
-            if (obj is string str)
-                writer.WriteString(key, str);
-            else if (obj is long l)
-                writer.WriteNumber(key, l);
-            else if (obj is int i)
-                writer.WriteNumber(key, i);
-            else if (obj is bool b)
-                writer.WriteBoolean(key, b);
-            else if (obj is DateTime dt)
-                writer.WriteString(key, dt.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture));
-            else if (typeof(IDictionary).IsAssignableFrom(objType))
-            {
-                IDictionary dictionary = (IDictionary)obj;
-                writer.WritePropertyName(key);
-
-                writer.WriteStartObject();
-                foreach (var k in dictionary.Keys)
-                    WriteObject(ref writer, k.ToString(), dictionary[k]);
-
-                writer.WriteEndObject();
             }
-            else if (typeof(IList).IsAssignableFrom(objType))
-            {
-                IList list = (IList)obj;
-                writer.WriteStartArray(key);
-                foreach (var k in list)
-                    WriteObjectValue(ref writer, k);
-
-                writer.WriteEndArray();
-            }
-            else if (obj is JsonElement j)
-            {
-                writer.WritePropertyName(key);
-                j.WriteTo(writer);
-            }
-            else if (obj is double dub)
-                writer.WriteNumber(key, dub);
-            else if (obj is decimal d)
-                writer.WriteNumber(key, d);
-            else if (obj is float f)
-                writer.WriteNumber(key, f);
-            else
-                throw LogHelper.LogExceptionMessage(
-                    new ArgumentException(
-                        LogHelper.FormatInvariant(
-                            LogMessages.IDX11025,
-                            LogHelper.MarkAsNonPII(objType.ToString()),
-                            LogHelper.MarkAsNonPII(key))));
-        }
-
-        /// <summary>
-        /// Writes values into an array.
-        /// Assumes the writer.StartArray() has been called.
-        /// </summary>
-        /// <param name="writer"></param>
-        /// <param name="obj"></param>
-        public static void WriteObjectValue(ref Utf8JsonWriter writer, object obj)
-        {
-            if (writer.CurrentDepth >= MaxDepth)
-                throw new InvalidOperationException(LogHelper.FormatInvariant(
-                    LogMessages.IDX10815,
-                    LogHelper.MarkAsNonPII(writer.CurrentDepth),
-                    LogHelper.MarkAsNonPII(MaxDepth)));
-
-            if (obj is null)
-            {
-                writer.WriteNullValue();
-                return;
-            }
-
-            Type objType = obj.GetType();
-
-            if (obj is string str)
-                writer.WriteStringValue(str);
-            else if (obj is DateTime dt)
-                writer.WriteStringValue(dt.ToUniversalTime());
-            else if (obj is int i)
-                writer.WriteNumberValue(i);
-            else if (obj is bool b)
-                writer.WriteBooleanValue(b);
-            else if (obj is long l)
-                writer.WriteNumberValue(l);
-            else if (obj is null)
-                writer.WriteNullValue();
-            else if (obj is double d)
-                writer.WriteNumberValue((decimal)d);
-            else if (obj is JsonElement j)
-                j.WriteTo(writer);
-            else if (typeof(IDictionary).IsAssignableFrom(objType))
-            {
-                IDictionary dictionary = (IDictionary)obj;
-                writer.WriteStartObject();
-                foreach (var k in dictionary.Keys)
-                    WriteObject(ref writer, k.ToString(), dictionary[k]);
-
-                writer.WriteEndObject();
-            }
-            else if (typeof(IList).IsAssignableFrom(objType))
-            {
-                IList list = (IList)obj;
-                writer.WriteStartArray();
-                foreach (var k in list)
-                    WriteObjectValue(ref writer, k);
-
-                writer.WriteEndArray();
-            }
-            else if (obj is decimal m)
-                writer.WriteNumberValue(m);
-            else if (obj is float f)
-                writer.WriteNumberValue(f);
-            else
-                writer.WriteStringValue(obj.ToString());
-        }
-
-        public static void WriteStrings(ref Utf8JsonWriter writer, ReadOnlySpan<byte> propertyName, IList<string> strings)
-        {
-            writer.WriteStartArray(propertyName);
-            foreach (string str in strings)
-                writer.WriteStringValue(str);
-
-            writer.WriteEndArray();
-        }
-
-        public static void WriteStrings(ref Utf8JsonWriter writer, ReadOnlySpan<byte> propertyName, ICollection<string> strings)
-        {
-            writer.WriteStartArray(propertyName);
-            foreach (string str in strings)
-                writer.WriteStringValue(str);
-
-            writer.WriteEndArray();
-        }
-        #endregion
-    }
-}

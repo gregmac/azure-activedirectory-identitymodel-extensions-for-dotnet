@@ -109,9 +109,24 @@ namespace Microsoft.IdentityModel.Protocols.OpenIdConnect
 
         private void SetJsonParameters(string json)
         {
+            if (string.IsNullOrEmpty(json))
+                throw LogHelper.LogArgumentNullException(nameof(json));
+
             Utf8JsonReader reader = new(Encoding.UTF8.GetBytes(json).AsSpan());
 
-            while (reader.Read())
+            if (!JsonPrimitives.IsReaderAtTokenType(ref reader, JsonTokenType.StartObject, true))
+                throw LogHelper.LogExceptionMessage(
+                    new JsonException(
+                        LogHelper.FormatInvariant(
+                        Tokens.LogMessages.IDX11023,
+                        LogHelper.MarkAsNonPII("JsonTokenType.StartObject"),
+                        LogHelper.MarkAsNonPII(reader.TokenType),
+                        LogHelper.MarkAsNonPII(ClassName),
+                        LogHelper.MarkAsNonPII(reader.TokenStartIndex),
+                        LogHelper.MarkAsNonPII(reader.CurrentDepth),
+                        LogHelper.MarkAsNonPII(reader.BytesConsumed))));
+
+            while(true)
             {
                 // propertyValue is set to match 6.x
                 if (reader.TokenType == JsonTokenType.PropertyName)
@@ -125,7 +140,10 @@ namespace Microsoft.IdentityModel.Protocols.OpenIdConnect
                     else if ((reader.TokenType == JsonTokenType.True) || (reader.TokenType == JsonTokenType.False))
                         propertyValue = JsonPrimitives.ReadBoolean(ref reader, propertyName, ClassName, false).ToString();
                     else if (reader.TokenType == JsonTokenType.Null)
+                    {
                         propertyValue = "";
+                        reader.Read();
+                    }
                     else if (reader.TokenType == JsonTokenType.StartArray)
                         propertyValue = JsonPrimitives.ReadJsonElement(ref reader).GetRawText();
                     else if (reader.TokenType == JsonTokenType.StartObject)
@@ -133,6 +151,11 @@ namespace Microsoft.IdentityModel.Protocols.OpenIdConnect
 
                     SetParameter(propertyName, propertyValue);
                 }
+                // We read a JsonTokenType.StartObject above, exiting and positioning reader at next token.
+                else if (JsonPrimitives.IsReaderAtTokenType(ref reader, JsonTokenType.EndObject, true))
+                    break;
+                else if (!reader.Read())
+                    break;
             }
         }
 

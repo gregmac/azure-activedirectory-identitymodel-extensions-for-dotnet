@@ -53,7 +53,7 @@ namespace Microsoft.IdentityModel.Tokens.Json.Tests
         {
             JsonTestClass jsonTestClass = new JsonTestClass();
 
-            if (!JsonSerializerPrimitives.IsReaderAtTokenType(ref reader, JsonTokenType.StartObject, false))
+            if (!JsonSerializerPrimitives.IsReaderAtTokenType(ref reader, JsonTokenType.StartObject, true))
                 throw LogHelper.LogExceptionMessage(
                     new JsonException(
                         LogHelper.FormatInvariant(
@@ -65,7 +65,7 @@ namespace Microsoft.IdentityModel.Tokens.Json.Tests
                         LogHelper.MarkAsNonPII(reader.CurrentDepth),
                         LogHelper.MarkAsNonPII(reader.BytesConsumed))));
 
-            while (reader.Read())
+            while (true)
             {
                 if (reader.TokenType == JsonTokenType.PropertyName)
                 {
@@ -84,9 +84,9 @@ namespace Microsoft.IdentityModel.Tokens.Json.Tests
                             jsonTestClass.Int = JsonSerializerPrimitives.ReadInt(ref reader, "Int", _className);
                             break;
                         case "ListObject":
-                            List<object> objects = new List<object>();
+                            List<object> objects = JsonSerializerPrimitives.ReadArrayOfObjects(ref reader, "ListObject", _className);
 
-                            if (ReadObjects(ref reader, objects, "ListObject", _className) == null)
+                            if ( objects == null)
                             {
                                 throw LogHelper.LogExceptionMessage(
                                     new ArgumentNullException(
@@ -137,7 +137,10 @@ namespace Microsoft.IdentityModel.Tokens.Json.Tests
                     }
                 }
 
-                if (JsonSerializerPrimitives.IsReaderAtTokenType(ref reader, JsonTokenType.EndObject, true))
+                // We read a JsonTokenType.StartObject above, exiting and positioning reader at next token.
+                else if (JsonSerializerPrimitives.IsReaderAtTokenType(ref reader, JsonTokenType.EndObject, true))
+                    break;
+                else if (!reader.Read())
                     break;
             }
 
@@ -299,28 +302,5 @@ namespace Microsoft.IdentityModel.Tokens.Json.Tests
             writer.WriteEndObject();
         }
         #endregion
-
-        internal static IList<object> ReadObjects(ref Utf8JsonReader reader, IList<object> objects, string propertyName, string className)
-        {
-            _ = objects ?? throw LogHelper.LogExceptionMessage(new ArgumentNullException(nameof(objects)));
-
-            // returning null keeps the same logic as JsonSerialization.ReadObject
-            if (reader.TokenType == JsonTokenType.Null)
-                return null;
-
-            if (!JsonSerializerPrimitives.IsReaderAtTokenType(ref reader, JsonTokenType.StartArray, false))
-                throw LogHelper.LogExceptionMessage(
-                    JsonSerializerPrimitives.CreateJsonReaderExceptionInvalidType(ref reader, "JsonTokenType.StartArray", className, propertyName));
-
-            while (reader.Read())
-            {
-                if (JsonSerializerPrimitives.IsReaderAtTokenType(ref reader, JsonTokenType.EndArray, true))
-                    break;
-
-                objects.Add(JsonSerializerPrimitives.ReadJsonElement(ref reader));
-            }
-
-            return objects;
-        }
     }
 }
