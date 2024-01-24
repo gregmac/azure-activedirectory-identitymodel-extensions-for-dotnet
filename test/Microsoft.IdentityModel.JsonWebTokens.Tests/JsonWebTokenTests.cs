@@ -1631,6 +1631,28 @@ namespace Microsoft.IdentityModel.JsonWebTokens.Tests
             JsonWebToken encodedToken = new JsonWebToken(jsonEncoded);
             _ = encodedToken.Claims;
         }
+
+#if NET6_0_OR_GREATER
+        // Test to verify equality between JsonWebTokens created from a string and an equivalent span
+        [Theory, MemberData(nameof(ParseTokenTheoryData))]
+        public void CompareJsonWebToken(JwtTheoryData theoryData)
+        {
+            var context = TestUtilities.WriteHeader($"{this}.CompareJsonWebToken", theoryData);
+            try
+            {
+                var tokenFromEncodedSpan = new JsonWebToken(theoryData.Token.AsSpan());
+                var tokenFromEncodedString = new JsonWebToken(theoryData.Token);
+
+                theoryData.ExpectedException.ProcessNoException(context);
+                IdentityComparer.AreEqual(tokenFromEncodedSpan, tokenFromEncodedString, context);
+            }
+            catch (Exception ex)
+            {
+                theoryData.ExpectedException.ProcessException(ex, context);
+            }
+            TestUtilities.AssertFailIfErrors(context);
+        }
+#endif
     }
 
     public class ParseTimeValuesTheoryData : TheoryDataBase
