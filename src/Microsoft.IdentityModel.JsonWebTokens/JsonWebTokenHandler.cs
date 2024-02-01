@@ -520,11 +520,13 @@ namespace Microsoft.IdentityModel.JsonWebTokens
         /// <returns>A <see cref="TokenValidationResult"/></returns>
         /// <remarks>
         /// <para>TokenValidationResult.Exception will be set to one of the following exceptions if the  <paramref name="token"/> is invalid.</para>
-        /// <para><exception cref="ArgumentNullException">if <paramref name="token"/> is null or empty.</exception></para>
-        /// <para><exception cref="ArgumentNullException">if <paramref name="validationParameters"/> is null.</exception></para>
-        /// <para><exception cref="ArgumentException">'token.Length' is greater than <see cref="TokenHandler.MaximumTokenSizeInBytes"/>.</exception></para>
-        /// <para><exception cref="SecurityTokenMalformedException">if <paramref name="token"/> is not a valid <see cref="JsonWebToken"/>, <see cref="ReadToken(string, TokenValidationParameters)"/></exception></para>
-        /// <para><exception cref="SecurityTokenMalformedException">if the validationParameters.TokenReader delegate is not able to parse/read the token as a valid <see cref="JsonWebToken"/>, <see cref="ReadToken(string, TokenValidationParameters)"/></exception></para>
+        /// <list type="bullet">
+        /// <item><see cref="ArgumentNullException"/>: if <paramref name="token"/> is null or empty.</item>
+        /// <item><see cref="ArgumentNullException"/>: if <paramref name="validationParameters"/> is null.</item>
+        /// <item><see cref="ArgumentException"/>: 'token.Length' is greater than <see cref="TokenHandler.MaximumTokenSizeInBytes"/>.</item>
+        /// <item><see cref="SecurityTokenMalformedException"/>: if <paramref name="token"/> is not a valid <see cref="JsonWebToken"/>, <see cref="ReadToken(string, TokenValidationParameters)"/></item>
+        /// <item><see cref="SecurityTokenMalformedException"/>: if the validationParameters.TokenReader delegate is not able to parse/read the token as a valid <see cref="JsonWebToken"/>, <see cref="ReadToken(string, TokenValidationParameters)"/></item>
+        /// </list>
         /// </remarks>
         public override async Task<TokenValidationResult> ValidateTokenAsync(string token, TokenValidationParameters validationParameters)
         {
